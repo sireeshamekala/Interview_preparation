@@ -1,0 +1,122 @@
+Client connection in dataplex
+What does "Client connection" mean?
+Instead of creating Data Scans manually from the GCP Console, you can control Dataplex using Python code.
+The first step is to create a connection (client) to the Dataplex service.
+Example:
+from google.cloud import dataplex_v1
+
+client = dataplex_v1.DataScanServiceClient()
+Here:
+•	google.cloud.dataplex_v1 → Dataplex Python SDK
+•	DataScanServiceClient() → Creates a client that communicates with the Dataplex API.
+Think of it like this:
+Python Program
+       │
+       ▼
+Dataplex Python Client
+       │
+       ▼
+Dataplex API
+       │
+       ▼
+Google Cloud Dataplex
+The client acts as a bridge between your Python code and the Dataplex service.
+________________________________________
+What is "Run Scan"?
+Once the client is connected, you can tell Dataplex to run a scan.
+Example:
+request = dataplex_v1.RunDataScanRequest(
+    name=scan_name
+)
+
+client.run_data_scan(request=request)
+This tells Dataplex:
+"Run the Data Scan named sales-profile-scan."
+Dataplex then starts scanning the registered BigQuery table or Cloud Storage asset.
+________________________________________
+What happens when the scan runs?
+Suppose your BigQuery table is:
+retail_demo.sales_clean
+Dataplex scans the table.
+For a Profile Scan, it collects information such as:
+•	Number of rows
+•	Number of columns
+•	NULL values
+•	Minimum value
+•	Maximum value
+•	Average
+•	Duplicate count
+•	Data distribution
+For a Quality Scan, it checks your business rules, such as:
+•	sale_id must be unique
+•	customer_id must not be NULL
+•	price must be greater than 0
+Then Dataplex produces a report showing which rules passed or failed.
+________________________________________
+Complete Flow
+Python Code
+      │
+      ▼
+Create Dataplex Client
+      │
+      ▼
+Connect to Dataplex API
+      │
+      ▼
+Create Data Scan (optional)
+      │
+      ▼
+Run Data Scan
+      │
+      ▼
+Dataplex scans BigQuery table
+      │
+      ▼
+Results available in Dataplex
+________________________________________
+Why use Python instead of the Console?
+In real projects, scans are often automated.
+Instead of manually clicking Run Scan every day in the GCP Console, you can write Python code and integrate it with an Airflow DAG.
+For example:
+Cloud Composer DAG
+        │
+        ▼
+Dataflow finishes
+        │
+        ▼
+PythonOperator
+        │
+        ▼
+Dataplex Client
+        │
+        ▼
+Run Profile Scan
+        │
+        ▼
+Run Quality Scan
+        │
+        ▼
+Check Results
+        │
+        ▼
+Send Email if Scan Fails
+This allows your data quality checks to run automatically as part of your data pipeline.
+________________________________________
+The Dataplex Python client is simply another way to use Dataplex.
+You have two common ways to work with Dataplex:
+1. Using the GCP Console (Manual)
+•	Create Lake
+•	Create Zone
+•	Register Asset
+•	Create Data Scan
+•	Click Run Scan
+2. Using Python (Programmatic)
+•	Create Dataplex client
+•	Create Data Scan
+•	Run Data Scan
+•	Read scan results
+•	Integrate with Cloud Composer or other automation
+Both methods use the same Dataplex service. The difference is only how you interact with it:
+•	Console → Manual, point-and-click.
+•	Python client → Automated, code-driven. This is the approach commonly used in production pipelines.
+
