@@ -1,0 +1,230 @@
+Below are three Cloud Run Function examples showing how to trigger **Airflow**, **Dataflow**, and **Dataproc Serverless**. The first part of each function (receiving the Cloud Storage event, validating the CSV, etc.) is the same. Only the service invocation changes.
+
+---
+
+# 1. Cloud Run Function → Airflow
+
+**Architecture**
+
+```text
+GCS
+   │
+Eventarc
+   │
+Cloud Run Function
+   │
+Airflow REST API
+   │
+Dataproc/Dataflow/Other Tasks
+```
+
+```python
+import functions_framework
+import requests
+import google.auth
+from google.auth.transport.requests import Request
+
+AIRFLOW_URL = "https://<composer-url>/api/v1/dags/employee_dataproc_serverless/dagRuns"
+
+@functions_framework.cloud_event
+def trigger_airflow(cloud_event):
+
+    data = cloud_event.data
+
+    bucket = data["bucket"]
+    file_name = data["name"]
+
+    if not file_name.endswith(".csv"):
+        return
+
+    payload = {
+        "conf": {
+            "bucket": bucket,
+            "file_path": file_name
+        }
+    }
+
+    credentials, _ = google.auth.default()
+    credentials.refresh(Request())
+
+    headers = {
+        "Authorization": f"Bearer {credentials.token}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(
+        AIRFLOW_URL,
+        headers=headers,
+        json=payload
+    )
+
+    response.raise_for_status()
+```
+
+---
+
+# 2. Cloud Run Function → Dataflow (Flex Template)
+
+**Architecture**
+
+```text
+GCS
+   │
+Eventarc
+   │
+Cloud Run Function
+   │
+Dataflow REST API
+   │
+Dataflow Job
+   │
+BigQuery
+```
+
+```python
+import functions_framework
+import requests
+import google.auth
+from google.auth.transport.requests import Request
+
+PROJECT_ID = "gcp-free-trail-pavan-2026"
+REGION = "us-central1"
+
+DATAFLOW_URL = (
+    f"https://dataflow.googleapis.com/v1b3/projects/"
+    f"{PROJECT_ID}/locations/{REGION}/flexTemplates:launch"
+)
+
+@functions_framework.cloud_event
+def trigger_dataflow(cloud_event):
+
+    data = cloud_event.data
+
+    bucket = data["bucket"]
+    file_name = data["name"]
+
+    if not file_name.endswith(".csv"):
+        return
+
+    payload = {
+        "launchParameter": {
+            "jobName": "employee-dataflow-job",
+            "containerSpecGcsPath": "gs://niko-health/templates/dataflow-template.json",
+            "parameters": {
+                "inputFile": f"gs://{bucket}/{file_name}",
+                "outputTable": "gcp-free-trail-pavan-2026:employee_niko_health.employee_1"
+            }
+        }
+    }
+
+    credentials, _ = google.auth.default()
+    credentials.refresh(Request())
+
+    headers = {
+        "Authorization": f"Bearer {credentials.token}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(
+        DATAFLOW_URL,
+        headers=headers,
+        json=payload
+    )
+
+    response.raise_for_status()
+```
+
+---
+
+# 3. Cloud Run Function → Dataproc Serverless
+
+**Architecture**
+
+```text
+GCS
+   │
+Eventarc
+   │
+Cloud Run Function
+   │
+Dataproc Batch API
+   │
+Dataproc Serverless
+   │
+BigQuery
+```
+
+```python
+import functions_framework
+import requests
+import google.auth
+from google.auth.transport.requests import Request
+
+PROJECT_ID = "gcp-free-trail-pavan-2026"
+REGION = "us-central1"
+
+DATAPROC_URL = (
+    f"https://dataproc.googleapis.com/v1/projects/"
+    f"{PROJECT_ID}/locations/{REGION}/batches"
+)
+
+@functions_framework.cloud_event
+def trigger_dataproc(cloud_event):
+
+    data = cloud_event.data
+
+    bucket = data["bucket"]
+    file_name = data["name"]
+
+    if not file_name.endswith(".csv"):
+        return
+
+    payload = {
+        "pysparkBatch": {
+            "mainPythonFileUri": "gs://niko-health/spark-code/Niko_Health_dataproc.py",
+            "args": [
+                bucket,
+                file_name
+            ]
+        },
+        "environmentConfig": {
+            "executionConfig": {
+                "serviceAccount": "niko-helath@gcp-free-trail-pavan-2026.iam.gserviceaccount.com"
+            }
+        }
+    }
+
+    credentials, _ = google.auth.default()
+    credentials.refresh(Request())
+
+    headers = {
+        "Authorization": f"Bearer {credentials.token}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(
+        DATAPROC_URL,
+        headers=headers,
+        json=payload
+    )
+
+    response.raise_for_status()
+```
+
+---
+
+# Comparison
+
+| Cloud Run triggers      | API Used                   | Payload Contains                             | Next Step                                                    |
+| ----------------------- | -------------------------- | -------------------------------------------- | ------------------------------------------------------------ |
+| **Airflow**             | Airflow REST API           | `dag_run.conf` (bucket, file_path)           | Starts an Airflow DAG, which can orchestrate multiple tasks. |
+| **Dataflow**            | Dataflow Flex Template API | Template path and pipeline parameters        | Launches a Dataflow pipeline directly.                       |
+| **Dataproc Serverless** | Dataproc Batch API         | PySpark file URI, arguments, service account | Starts a Dataproc Serverless Spark batch directly.           |
+
+## When to use each
+
+* **Cloud Run → Airflow**: Use when you need orchestration, retries, dependencies, scheduling, or multiple tasks in a workflow.
+* **Cloud Run → Dataflow**: Use when you need Apache Beam for large-scale batch or streaming data processing.
+* **Cloud Run → Dataproc Serverless**: Use when your processing is Spark-based and you simply want to start a PySpark job without an orchestration layer.
+
+All three patterns begin the same way—**Cloud Storage → Eventarc → Cloud Run Function**. The only difference is **which Google Cloud API the function calls next**. This makes it easy to switch the downstream processing service while keeping the event-driven entry point unchanged.
