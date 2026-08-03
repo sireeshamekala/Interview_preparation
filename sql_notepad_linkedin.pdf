@@ -1,0 +1,39 @@
+1.
+A.
+SELECT *
+FROM (
+    SELECT *,
+           DENSE_RANK() OVER (ORDER BY salary DESC) AS rnk
+    FROM `gcp-free-trail-pavan-2026.employee_niko_health.employee_1`
+)
+WHERE rnk = 2;
+
+B.
+SELECT MAX(salary) AS SecondHighestSalary
+FROM employees
+WHERE salary < (
+    SELECT MAX(salary)
+    FROM employees
+);
+
+2.
+A.
+SELECT salary,count(*) as duplicate_count FROM `gcp-free-trail-pavan-2026.employee_niko_health.employee_1` 
+group by salary
+having duplicate_count>1
+
+B.For entire row use window function
+
+3.
+SELECT m.id,m.Employee,m.salary
+FROM Employee e
+join Employee m
+on e.Manager_ID=m.id
+where e.salary>m.salary
+
+4.
+SELECT department_id,
+COUNT(*) AS num_employees
+FROM employees
+GROUP BY department_id
+HAVING COUNT(*) > 5;
