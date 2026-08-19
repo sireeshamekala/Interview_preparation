@@ -1,0 +1,979 @@
+Chatgpt Link:https://chatgpt.com/c/6a851cf5-90e0-83ee-8373-4a19e000fbc7
+
+
+Absolutely. For a **SQL/Data Engineer interview**, these are the most important query patterns to practice. I'll use a common `employees` table so you can learn the patterns rather than memorize isolated queries.
+
+### Sample table
+
+```sql
+employees
++-------------+----------+--------+------------+------------+
+| employee_id | name     | salary | department | manager_id |
++-------------+----------+--------+------------+------------+
+| 1           | A        | 100000 | IT         | NULL       |
+| 2           | B        | 90000  | IT         | 1          |
+| 3           | C        | 90000  | HR         | 5          |
+| 4           | D        | 80000  | IT         | 1          |
+| 5           | E        | 120000 | HR         | NULL       |
+| 6           | F        | 70000  | HR         | 5          |
++-------------+----------+--------+------------+------------+
+```
+
+## 🔥 1. Highest salary
+
+```sql
+SELECT *
+FROM employees
+ORDER BY salary DESC
+LIMIT 1;
+```
+
+---
+
+## 2. Second-highest salary
+
+### Using `MAX`
+
+```sql
+SELECT MAX(salary) AS second_highest_salary
+FROM employees
+WHERE salary < (
+    SELECT MAX(salary)
+    FROM employees
+);
+```
+
+### Using `DENSE_RANK` — interview favorite
+
+```sql
+SELECT *
+FROM (
+    SELECT *,
+           DENSE_RANK() OVER (ORDER BY salary DESC) AS rnk
+    FROM employees
+)
+WHERE rnk = 2;
+```
+
+---
+
+## 3. Nth highest salary
+
+```sql
+SELECT *
+FROM (
+    SELECT *,
+           DENSE_RANK() OVER (ORDER BY salary DESC) AS rnk
+    FROM employees
+)
+WHERE rnk = 3;
+```
+
+Change `3` to whatever rank you need.
+
+---
+
+# 🔥 Window Functions
+
+## 4. ROW_NUMBER vs RANK vs DENSE_RANK
+
+```sql
+SELECT
+    name,
+    salary,
+    ROW_NUMBER() OVER (ORDER BY salary DESC) AS row_num,
+    RANK()       OVER (ORDER BY salary DESC) AS rnk,
+    DENSE_RANK() OVER (ORDER BY salary DESC) AS dense_rnk
+FROM employees;
+```
+
+For salaries:
+
+```text
+120000
+100000
+90000
+90000
+80000
+70000
+```
+
+Output:
+
+```text
+salary    row_num    rank    dense_rank
+120000       1         1         1
+100000       2         2         2
+90000        3         3         3
+90000        4         3         3
+80000        5         5         4
+70000        6         6         5
+```
+
+**Very important interview question.**
+
+---
+
+# 🔥 5. Highest salary in each department
+
+```sql
+SELECT *
+FROM (
+    SELECT *,
+           RANK() OVER (
+               PARTITION BY department
+               ORDER BY salary DESC
+           ) AS rnk
+    FROM employees
+)
+WHERE rnk = 1;
+```
+
+If you want **only one employee**, use `ROW_NUMBER()`.
+
+---
+
+## 6. Second-highest salary in each department
+
+```sql
+SELECT *
+FROM (
+    SELECT *,
+           DENSE_RANK() OVER (
+               PARTITION BY department
+               ORDER BY salary DESC
+           ) AS rnk
+    FROM employees
+)
+WHERE rnk = 2;
+```
+
+This is one of the **most important SQL interview questions**.
+
+---
+
+# 🔥 7. Employees earning more than department average
+
+```sql
+SELECT *
+FROM employees e
+WHERE salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department = e.department
+);
+```
+
+### Window-function version
+
+```sql
+SELECT *
+FROM (
+    SELECT *,
+           AVG(salary) OVER (
+               PARTITION BY department
+           ) AS avg_salary
+    FROM employees
+)
+WHERE salary > avg_salary;
+```
+
+---
+
+# 🔥 8. Department-wise average salary
+
+```sql
+SELECT
+    department,
+    AVG(salary) AS avg_salary
+FROM employees
+GROUP BY department;
+```
+
+---
+
+## 9. Department-wise maximum salary
+
+```sql
+SELECT
+    department,
+    MAX(salary) AS max_salary
+FROM employees
+GROUP BY department;
+```
+
+---
+
+## 10. Department-wise employee count
+
+```sql
+SELECT
+    department,
+    COUNT(*) AS employee_count
+FROM employees
+GROUP BY department;
+```
+
+---
+
+# 🔥 11. Find duplicate records
+
+Suppose:
+
+```text
+employee_id
+1
+2
+3
+3
+4
+4
+4
+```
+
+Query:
+
+```sql
+SELECT
+    employee_id,
+    COUNT(*) AS cnt
+FROM employees
+GROUP BY employee_id
+HAVING COUNT(*) > 1;
+```
+
+---
+
+# 🔥 12. Remove duplicates and keep latest record
+
+Suppose:
+
+```text
+employee_id | salary | updated_at
+1           | 50000  | 2026-01-01
+1           | 55000  | 2026-02-01
+1           | 60000  | 2026-03-01
+```
+
+Query:
+
+```sql
+SELECT *
+FROM employees
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY employee_id
+    ORDER BY updated_at DESC
+) = 1;
+```
+
+**`QUALIFY` is particularly useful in BigQuery.**
+
+---
+
+# 🔥 13. Employees whose salary is greater than their manager
+
+Self join:
+
+```sql
+SELECT
+    e.name AS employee,
+    e.salary AS employee_salary,
+    m.name AS manager,
+    m.salary AS manager_salary
+FROM employees e
+JOIN employees m
+    ON e.manager_id = m.employee_id
+WHERE e.salary > m.salary;
+```
+
+Very common interview question.
+
+---
+
+# 🔥 14. Find employees who don't have a manager
+
+```sql
+SELECT *
+FROM employees
+WHERE manager_id IS NULL;
+```
+
+---
+
+# 🔥 15. Find employees who have the same salary
+
+```sql
+SELECT *
+FROM employees
+WHERE salary IN (
+    SELECT salary
+    FROM employees
+    GROUP BY salary
+    HAVING COUNT(*) > 1
+);
+```
+
+---
+
+# 🔥 16. Find the highest-paid employee in each department
+
+```sql
+SELECT *
+FROM employees
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY department
+    ORDER BY salary DESC
+) = 1;
+```
+
+If multiple employees with the same highest salary should be returned:
+
+```sql
+SELECT *
+FROM employees
+QUALIFY RANK() OVER (
+    PARTITION BY department
+    ORDER BY salary DESC
+) = 1;
+```
+
+---
+
+# 🔥 17. Top 3 employees from each department
+
+```sql
+SELECT *
+FROM employees
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY department
+    ORDER BY salary DESC
+) <= 3;
+```
+
+If ties should be included:
+
+```sql
+SELECT *
+FROM employees
+QUALIFY DENSE_RANK() OVER (
+    PARTITION BY department
+    ORDER BY salary DESC
+) <= 3;
+```
+
+---
+
+# 🔥 18. Salary greater than overall average
+
+```sql
+SELECT *
+FROM employees
+WHERE salary > (
+    SELECT AVG(salary)
+    FROM employees
+);
+```
+
+---
+
+# 🔥 19. Count employees earning more than 80,000
+
+```sql
+SELECT COUNT(*) AS employee_count
+FROM employees
+WHERE salary > 80000;
+```
+
+---
+
+# 🔥 20. Department having more than 5 employees
+
+```sql
+SELECT
+    department,
+    COUNT(*) AS employee_count
+FROM employees
+GROUP BY department
+HAVING COUNT(*) > 5;
+```
+
+Remember:
+
+```text
+WHERE  → filters rows
+HAVING → filters groups
+```
+
+---
+
+# 🔥 21. Find departments whose average salary > 90,000
+
+```sql
+SELECT
+    department,
+    AVG(salary) AS avg_salary
+FROM employees
+GROUP BY department
+HAVING AVG(salary) > 90000;
+```
+
+---
+
+# 🔥 22. Running salary total
+
+```sql
+SELECT
+    employee_id,
+    name,
+    salary,
+    SUM(salary) OVER (
+        ORDER BY employee_id
+    ) AS running_total
+FROM employees;
+```
+
+---
+
+# 🔥 23. Running total by department
+
+```sql
+SELECT
+    employee_id,
+    name,
+    department,
+    salary,
+    SUM(salary) OVER (
+        PARTITION BY department
+        ORDER BY employee_id
+    ) AS running_total
+FROM employees;
+```
+
+---
+
+# 🔥 24. Difference between current and previous salary
+
+```sql
+SELECT
+    employee_id,
+    name,
+    salary,
+    LAG(salary) OVER (
+        ORDER BY employee_id
+    ) AS previous_salary
+FROM employees;
+```
+
+Calculate difference:
+
+```sql
+SELECT
+    employee_id,
+    name,
+    salary,
+    salary - LAG(salary) OVER (
+        ORDER BY employee_id
+    ) AS salary_difference
+FROM employees;
+```
+
+---
+
+# 🔥 25. Compare current row with next row
+
+Use `LEAD()`:
+
+```sql
+SELECT
+    employee_id,
+    name,
+    salary,
+    LEAD(salary) OVER (
+        ORDER BY employee_id
+    ) AS next_salary
+FROM employees;
+```
+
+Remember:
+
+```text
+LAG()  → previous row
+LEAD() → next row
+```
+
+---
+
+# 🔥 26. Find employees with same salary as someone else
+
+```sql
+SELECT *
+FROM employees
+WHERE salary IN (
+    SELECT salary
+    FROM employees
+    GROUP BY salary
+    HAVING COUNT(*) > 1
+);
+```
+
+---
+
+# 🔥 27. INNER JOIN
+
+```sql
+SELECT
+    e.name,
+    d.department_name
+FROM employees e
+INNER JOIN departments d
+    ON e.department_id = d.department_id;
+```
+
+Returns only matching records.
+
+---
+
+# 🔥 28. LEFT JOIN
+
+```sql
+SELECT
+    e.name,
+    d.department_name
+FROM employees e
+LEFT JOIN departments d
+    ON e.department_id = d.department_id;
+```
+
+Returns **all employees**, even if department doesn't exist.
+
+---
+
+# 🔥 29. Find employees without a department
+
+```sql
+SELECT e.*
+FROM employees e
+LEFT JOIN departments d
+    ON e.department_id = d.department_id
+WHERE d.department_id IS NULL;
+```
+
+---
+
+# 🔥 30. Customers who never placed an order
+
+Very common.
+
+```sql
+SELECT c.*
+FROM customers c
+LEFT JOIN orders o
+    ON c.customer_id = o.customer_id
+WHERE o.customer_id IS NULL;
+```
+
+---
+
+# 🔥 31. Customers who placed more than 3 orders
+
+```sql
+SELECT
+    customer_id,
+    COUNT(*) AS order_count
+FROM orders
+GROUP BY customer_id
+HAVING COUNT(*) > 3;
+```
+
+---
+
+# 🔥 32. Find duplicate records using ROW_NUMBER
+
+```sql
+SELECT *
+FROM (
+    SELECT *,
+           ROW_NUMBER() OVER (
+               PARTITION BY employee_id
+               ORDER BY updated_at DESC
+           ) AS rn
+    FROM employees
+)
+WHERE rn > 1;
+```
+
+`rn = 1` → keep
+`rn > 1` → duplicates
+
+---
+
+# 🔥 33. First order of every customer
+
+```sql
+SELECT *
+FROM orders
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY customer_id
+    ORDER BY order_date
+) = 1;
+```
+
+---
+
+# 🔥 34. Latest order of every customer
+
+```sql
+SELECT *
+FROM orders
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY customer_id
+    ORDER BY order_date DESC
+) = 1;
+```
+
+---
+
+# 🔥 35. Customers who ordered in every month
+
+Suppose checking January, February, March and April:
+
+```sql
+SELECT customer_id
+FROM orders
+WHERE EXTRACT(MONTH FROM order_date) IN (1,2,3,4)
+GROUP BY customer_id
+HAVING COUNT(DISTINCT EXTRACT(MONTH FROM order_date)) = 4;
+```
+
+---
+
+# 🔥 36. Find gaps in dates
+
+Suppose:
+
+```text
+2026-01-01
+2026-01-02
+2026-01-05
+2026-01-06
+2026-01-10
+```
+
+Use `LAG()`:
+
+```sql
+SELECT
+    order_date,
+    LAG(order_date) OVER (
+        ORDER BY order_date
+    ) AS previous_date
+FROM orders;
+```
+
+Then:
+
+```sql
+SELECT *
+FROM (
+    SELECT
+        order_date,
+        LAG(order_date) OVER (
+            ORDER BY order_date
+        ) AS previous_date
+    FROM orders
+)
+WHERE DATE_DIFF(order_date, previous_date, DAY) > 1;
+```
+
+---
+
+# 🔥 37. Find consecutive login days
+
+```sql
+SELECT
+    user_id,
+    login_date,
+    LAG(login_date) OVER (
+        PARTITION BY user_id
+        ORDER BY login_date
+    ) AS previous_login
+FROM logins;
+```
+
+Then check:
+
+```sql
+DATE_DIFF(login_date, previous_login, DAY) = 1
+```
+
+This is a common **advanced SQL** pattern.
+
+---
+
+# 🔥 38. Percentage contribution of each employee's salary
+
+```sql
+SELECT
+    name,
+    salary,
+    ROUND(
+        salary * 100.0 /
+        SUM(salary) OVER (),
+        2
+    ) AS salary_percentage
+FROM employees;
+```
+
+---
+
+# 🔥 39. Department salary percentage
+
+```sql
+SELECT
+    name,
+    department,
+    salary,
+    ROUND(
+        salary * 100.0 /
+        SUM(salary) OVER (
+            PARTITION BY department
+        ),
+        2
+    ) AS department_salary_percentage
+FROM employees;
+```
+
+---
+
+# 🔥 40. Employees with salary rank
+
+```sql
+SELECT
+    name,
+    department,
+    salary,
+    DENSE_RANK() OVER (
+        ORDER BY salary DESC
+    ) AS salary_rank
+FROM employees;
+```
+
+---
+
+# 🔥 41. Salary rank within department
+
+```sql
+SELECT
+    name,
+    department,
+    salary,
+    DENSE_RANK() OVER (
+        PARTITION BY department
+        ORDER BY salary DESC
+    ) AS department_rank
+FROM employees;
+```
+
+---
+
+# 🔥 42. CTE example
+
+```sql
+WITH high_salary AS (
+    SELECT *
+    FROM employees
+    WHERE salary > 90000
+)
+SELECT *
+FROM high_salary;
+```
+
+---
+
+# 🔥 43. Multiple CTEs
+
+```sql
+WITH dept_avg AS (
+    SELECT
+        department,
+        AVG(salary) AS avg_salary
+    FROM employees
+    GROUP BY department
+),
+employee_data AS (
+    SELECT
+        e.*,
+        d.avg_salary
+    FROM employees e
+    JOIN dept_avg d
+        ON e.department = d.department
+)
+SELECT *
+FROM employee_data
+WHERE salary > avg_salary;
+```
+
+---
+
+# 🔥 44. CASE statement
+
+```sql
+SELECT
+    name,
+    salary,
+    CASE
+        WHEN salary >= 100000 THEN 'High'
+        WHEN salary >= 80000 THEN 'Medium'
+        ELSE 'Low'
+    END AS salary_category
+FROM employees;
+```
+
+---
+
+# 🔥 45. NULL handling
+
+```sql
+SELECT
+    name,
+    COALESCE(manager_id, 0) AS manager_id
+FROM employees;
+```
+
+In BigQuery:
+
+```sql
+IFNULL(manager_id, 0)
+```
+
+---
+
+# 🔥 46. Find NULL values
+
+```sql
+SELECT *
+FROM employees
+WHERE manager_id IS NULL;
+```
+
+Never do:
+
+```sql
+WHERE manager_id = NULL
+```
+
+---
+
+# 🔥 47. UNION vs UNION ALL
+
+```sql
+SELECT name FROM employees_2025
+UNION
+SELECT name FROM employees_2026;
+```
+
+Removes duplicates.
+
+```sql
+SELECT name FROM employees_2025
+UNION ALL
+SELECT name FROM employees_2026;
+```
+
+Keeps duplicates.
+
+**Interview question:** Which is faster?
+
+Usually **`UNION ALL`**, because it doesn't need duplicate elimination.
+
+---
+
+# 🔥 48. Find records existing in one table but not another
+
+Using `EXCEPT`:
+
+```sql
+SELECT employee_id
+FROM employees_2026
+
+EXCEPT DISTINCT
+
+SELECT employee_id
+FROM employees_2025;
+```
+
+---
+
+# 🔥 49. Pivot data
+
+In BigQuery:
+
+```sql
+SELECT *
+FROM (
+    SELECT department, salary
+    FROM employees
+)
+PIVOT (
+    AVG(salary)
+    FOR department IN ('IT', 'HR')
+);
+```
+
+---
+
+# 🔥 50. UNNEST — extremely important for BigQuery
+
+Suppose:
+
+```text
+order_id | items
+---------|-----------------------
+1        | ['Laptop', 'Mouse']
+2        | ['Keyboard', 'Monitor']
+```
+
+Query:
+
+```sql
+SELECT
+    order_id,
+    item
+FROM orders
+CROSS JOIN UNNEST(items) AS item;
+```
+
+Output:
+
+```text
+1   Laptop
+1   Mouse
+2   Keyboard
+2   Monitor
+```
+
+---
+
+# ⭐ The 15 I would prioritize for your interview
+
+Since you're preparing for a **GCP/Data Engineer senior-type interview**, focus especially on these:
+
+| Priority | Question                               |
+| -------- | -------------------------------------- |
+| ⭐⭐⭐      | Second-highest salary                  |
+| ⭐⭐⭐      | Nth highest salary                     |
+| ⭐⭐⭐      | Highest salary per department          |
+| ⭐⭐⭐      | Second-highest salary per department   |
+| ⭐⭐⭐      | `ROW_NUMBER` vs `RANK` vs `DENSE_RANK` |
+| ⭐⭐⭐      | Remove duplicates using `ROW_NUMBER`   |
+| ⭐⭐⭐      | Employee salary > manager salary       |
+| ⭐⭐⭐      | Employee salary > department average   |
+| ⭐⭐⭐      | Top N employees per department         |
+| ⭐⭐⭐      | `LAG()` / `LEAD()`                     |
+| ⭐⭐⭐      | Running total                          |
+| ⭐⭐⭐      | Customers with no orders               |
+| ⭐⭐⭐      | Customers purchasing every month       |
+| ⭐⭐⭐      | Gaps/consecutive dates                 |
+| ⭐⭐⭐      | `UNNEST()` in BigQuery                 |
+
+For a **6+ year Data Engineer interview**, don't just memorize these queries. Be ready to explain **why you chose `ROW_NUMBER` vs `RANK` vs `DENSE_RANK`, `WHERE` vs `HAVING`, `INNER` vs `LEFT JOIN`, CTE vs subquery, and how the query behaves with duplicates and NULLs**.
